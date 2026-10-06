@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>График дежурств</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Inter','Segoe UI',system-ui,Arial,sans-serif;
+    background:#eef0f3;color:#1a1d21;
+    min-height:100vh;font-size:13px;
+    -webkit-text-size-adjust:100%;
+  }
+  .app{max-width:900px;margin:0 auto;padding:12px 12px 40px}
+
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    gap:10px;margin-bottom:14px;
+  }
+  .years{
+    display:inline-flex;background:#fff;border-radius:10px;
+    border:1px solid #dfe3e8;padding:3px;gap:2px;
+  }
+  .year-btn{
+    background:transparent;border:none;border-radius:8px;
+    padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;
+    color:#5a6470;cursor:pointer;transition:all .12s;
+    font-variant-numeric:tabular-nums;
+  }
+  .year-btn.active{background:#1a1d21;color:#fff}
+  .year-btn:not(.active):hover{background:#eef1f5;color:#1a1d21}
+
+  .mini{
+    background:#fff;border:1px solid #dfe3e8;border-radius:8px;
+    padding:8px 12px;font-size:12px;font-weight:500;color:#3a3f47;
+    cursor:pointer;font-family:inherit;
+  }
+  .mini:hover{background:#eef1f5}
+  .mini.danger{color:#c81e1e}
+
+  /* люди */
+  .people{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:6px;
+    margin-bottom:10px;
+  }
+  @media (min-width:560px){
+    .people{grid-template-columns:repeat(4,1fr)}
+  }
+  .person{
+    display:flex;flex-direction:column;gap:4px;
+    padding:10px 12px;
+    background:#fff;border:2px solid #dfe3e8;border-radius:10px;
+    cursor:pointer;font-family:inherit;text-align:left;
+    transition:all .12s;position:relative;overflow:hidden;min-width:0;
+  }
+  .person:hover{border-color:#b8c0cc}
+  .person.active{border-color:currentColor;box-shadow:0 0 0 3px rgba(0,0,0,.05)}
+  .person .top{display:flex;align-items:center;gap:6px}
+  .person .dot{width:12px;height:12px;border-radius:4px;background:currentColor;flex-shrink:0}
+  .person .nm{
+    font-size:12px;font-weight:700;color:#1a1d21;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    flex:1;min-width:0;
+  }
+  .person .cnt{
+    font-size:11px;font-weight:600;color:#8892a0;
+    font-variant-numeric:tabular-nums;
+  }
+  .person.active .cnt{color:currentColor}
+
+  /* инфо */
+  .info{
+    background:#fff;border:1px solid #e3e7ec;border-radius:10px;
+    padding:12px 14px;margin-bottom:12px;display:none;
+    border-left:4px solid currentColor;
+  }
+  .info.on{display:block}
+  .info .name{font-size:14px;font-weight:700;margin-bottom:8px}
+  .info .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px}
+  @media (min-width:560px){
+    .info .stats{grid-template-columns:repeat(4,1fr)}
+  }
+  .info .stat{min-width:0}
+  .info .stat .k{
+    font-size:10px;font-weight:600;color:#8892a0;
+    letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px;
+  }
+  .info .stat .v{
+    font-size:14px;font-weight:700;color:#1a1d21;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+
+  /* вкладки месяцев — сетка, помещается без скролла */
+  .tabs{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:4px;
+    margin-bottom:12px;
+  }
+  .tab{
+    position:relative;
+    background:#fff;border:1px solid #dfe3e8;border-radius:8px;
+    padding:9px 2px;font-size:12px;font-weight:600;
+    color:#3a3f47;cursor:pointer;font-family:inherit;
+    transition:all .12s;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;min-width:0;
+  }
+  .tab .badge{
+    font-size:9.5px;font-weight:700;
+    background:rgba(0,0,0,.06);color:#5a6470;
+    padding:0 5px;border-radius:20px;
+    font-variant-numeric:tabular-nums;
+    line-height:14px;min-height:14px;
+    opacity:0;
+  }
+  .tab .badge.on{opacity:1}
+  .tab.active{background:#1a1d21;color:#fff;border-color:#1a1d21}
+  .tab.active .badge{background:rgba(255,255,255,.2);color:#fff}
+  .tab.today-tab::after{
+    content:'';position:absolute;bottom:3px;left:50%;
+    transform:translateX(-50%);
+    width:4px;height:4px;border-radius:50%;
+    background:#ff4422;
+  }
+  .tab.active.today-tab::after{background:#fff}
+
+  /* календарь */
+  .cal-card{
+    background:#fff;border:1px solid #e3e7ec;border-radius:12px;
+    padding:14px 10px;margin-bottom:12px;
+  }
+  .cal-title{
+    font-size:16px;font-weight:700;margin:0 0 12px;
+    text-align:center;color:#1a1d21;letter-spacing:.02em;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .cal-title .yr{color:#8892a0;font-weight:500;font-size:14px}
+
+  .cal-head{
+    display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+    margin-bottom:4px;
+  }
+  .cal-head .wd{
+    text-align:center;font-size:10px;font-weight:700;
+    color:#9aa3ae;letter-spacing:.05em;text-transform:uppercase;
+  }
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cell{
+    height:46px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    border-radius:8px;background:#fff;
+    border:1px solid #e6e9ee;color:#5a6470;
+    font-size:13px;font-weight:600;
+    cursor:pointer;user-select:none;
+    transition:transform .08s, background .12s, border-color .12s, opacity .12s;
+    font-variant-numeric:tabular-nums;line-height:1;position:relative;
+  }
+  .cell:hover{background:#f4f6f9}
+  .cell:active{transform:scale(.9)}
+  .cell.void{background:transparent;border-color:transparent;cursor:default;pointer-events:none}
+  .cell.wknd{background:#f6f7f9;border-color:#e9ecf0;color:#7a8490}
+
+  .cell.g{background:#ff4422;color:#fff;border-color:#ff4422}
+  .cell.l{background:#2fb38a;color:#fff;border-color:#2fb38a}
+  .cell.b{background:#5b47b8;color:#fff;border-color:#5b47b8}
+  .cell.s{background:#0066cc;color:#fff;border-color:#0066cc}
+
+  .cell.g:hover{background:#e83a1a;border-color:#e83a1a}
+  .cell.l:hover{background:#22a37c;border-color:#22a37c}
+  .cell.b:hover{background:#4d3aa5;border-color:#4d3aa5}
+  .cell.s:hover{background:#0055aa;border-color:#0055aa}
+
+  .cell.match{box-shadow:0 0 0 2px #1a1d21; z-index:1}
+  .cell:not(.match):not(.void){opacity:.55}
+  .cell.void{opacity:1}
+
+  .cell .num{font-size:13.5px;font-weight:700}
+  .cell .tag{
+    font-size:9px;font-weight:700;margin-top:2px;
+    letter-spacing:.04em;opacity:.95;
+  }
+  .cell:not(.g):not(.l):not(.b):not(.s) .tag{color:#8892a0}
+
+  .cell.today::after{
+    content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    width:4px;height:4px;border-radius:50%;background:#111;opacity:.45;
+  }
+  .cell.g.today::after,
+  .cell.l.today::after,
+  .cell.b.today::after,
+  .cell.s.today::after{background:#fff;opacity:.85}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;
+    transform:translateX(-50%) translateY(120px);
+    background:#1a1d21;color:#fff;
+    padding:11px 20px;border-radius:10px;
+    font-size:13px;font-weight:500;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+    z-index:1000;opacity:0;
+    transition:transform .25s, opacity .25s;
+    pointer-events:none;max-width:90vw;text-align:center;
+  }
+  .toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+
+  @media (min-width:560px){
+    .cell{height:56px}
+    .cell .num{font-size:15px}
+    .cell .tag{font-size:10px}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="topbar">
+    <div class="years" id="years">
+      <button class="year-btn active" data-year="2026">2026</button>
+      <button class="year-btn" data-year="2027">2027</button>
+    </div>
+    <button class="mini danger" id="resetBtn">Сброс</button>
+  </div>
+
+  <div class="people" id="people"></div>
+  <div class="info" id="info"></div>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="cal-card">
+    <h2 class="cal-title" id="calTitle"></h2>
+    <div class="cal-head">
+      <div class="wd">Пн</div><div class="wd">Вт</div><div class="wd">Ср</div>
+      <div class="wd">Чт</div><div class="wd">Пт</div><div class="wd">Сб</div><div class="wd">Вс</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+const STORAGE_KEY = 'duty-schedule-v7';
+
+const PEOPLE = [
+  { id:'g', name:'Герасимов Андрей Михайлович', short:'Герасимов', color:'#ff4422' },
+  { id:'l', name:'Лебедев Александр Евгеньевич', short:'Лебедев',   color:'#2fb38a' },
+  { id:'b', name:'Брагин Сергей Александрович', short:'Брагин',     color:'#5b47b8' },
+  { id:'s', name:'Синий дежурный',             short:'Синий',      color:'#0066cc' },
+];
+
+const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MONTHS_SHORT = ['Янв','Фев','Мар','Апр','Май','Июн',
+                     'Июл','Авг','Сен','Окт','Ноя','Дек'];
+
+/* Данные 2026 */
+const SEED_2026 = {
+  // Январь
+  '2026-01-01':'b','2026-01-02':'b','2026-01-03':'b','2026-01-04':'b',
+  '2026-01-05':'g','2026-01-06':'g','2026-01-07':'g','2026-01-08':'g','2026-01-09':'g','2026-01-10':'g','2026-01-11':'g',
+  '2026-01-12':'l','2026-01-13':'l','2026-01-14':'l','2026-01-15':'l','2026-01-16':'l','2026-01-17':'l','2026-01-18':'l',
+  '2026-01-19':'s','2026-01-20':'s','2026-01-21':'s','2026-01-22':'s','2026-01-23':'s','2026-01-24':'s','2026-01-25':'s',
+  '2026-01-26':'b','2026-01-27':'b','2026-01-28':'b','2026-01-29':'b','2026-01-30':'b','2026-01-31':'b',
+
+  // Февраль
+  '2026-02-01':'b',
+  '2026-02-02':'l','2026-02-03':'l','2026-02-04':'l','2026-02-05':'l','2026-02-06':'l','2026-02-07':'l','2026-02-08':'l',
+  '2026-02-09':'g','2026-02-10':'g','2026-02-11':'g','2026-02-12':'g','2026-02-13':'g','2026-02-14':'g','2026-02-15':'g',
+  '2026-02-16':'b','2026-02-17':'b','2026-02-18':'b','2026-02-19':'b','2026-02-20':'b','2026-02-21':'b','2026-02-22':'b',
+  '2026-02-23':'l','2026-02-24':'l','2026-02-25':'l','2026-02-26':'l','2026-02-27':'l','2026-02-28':'l',
+
+  // Март
+  '2026-03-01':'l',
+  '2026-03-02':'b','2026-03-03':'b','2026-03-04':'b','2026-03-05':'b','2026-03-06':'b','2026-03-07':'b',
+  '2026-03-08':'g','2026-03-09':'g','2026-03-10':'g','2026-03-11':'g','2026-03-12':'g','2026-03-13':'g','2026-03-14':'g','2026-03-15':'g',
+  '2026-03-16':'l','2026-03-17':'l','2026-03-18':'l','2026-03-19':'l','2026-03-20':'l','2026-03-21':'l','2026-03-22':'l',
+  '2026-03-23':'b','2026-03-24':'b','2026-03-25':'b','2026-03-26':'b','2026-03-27':'b','2026-03-28':'b','2026-03-29':'b',
+  '2026-03-30':'g','2026-03-31':'g',
+
+  // Апрель
+  '2026-04-01':'g','2026-04-02':'g','2026-04-03':'g','2026-04-04':'g','2026-04-05':'g',
+  '2026-04-06':'l','2026-04-07':'l','2026-04-08':'l','2026-04-09':'l','2026-04-10':'l','2026-04-11':'l','2026-04-12':'l',
+  '2026-04-13':'b','2026-04-14':'b','2026-04-15':'b','2026-04-16':'b','2026-04-17':'b','2026-04-18':'b','2026-04-19':'b',
+  '2026-04-20':'g','2026-04-21':'g','2026-04-22':'g','2026-04-23':'g','2026-04-24':'g','2026-04-25':'g','2026-04-26':'g',
+  '2026-04-27':'b','2026-04-28':'b','2026-04-29':'b','2026-04-30':'b',
+
+  // Май
+  '2026-05-01':'b','2026-05-02':'b','2026-05-03':'b',
+  '2026-05-04':'g','2026-05-05':'g','2026-05-06':'g','2026-05-07':'g','2026-05-08':'g','2026-05-09':'g','2026-05-10':'g',
+  '2026-05-11':'l','2026-05-12':'l','2026-05-13':'l','2026-05-14':'l','2026-05-15':'l','2026-05-16':'l','2026-05-17':'l',
+  '2026-05-18':'g','2026-05-19':'g','2026-05-20':'g','2026-05-21':'g','2026-05-22':'g','2026-05-23':'g','2026-05-24':'g',
+  '2026-05-25':'b','2026-05-26':'b','2026-05-27':'b','2026-05-28':'b','2026-05-29':'b','2026-05-30':'b','2026-05-31':'b',
+
+  // Июнь
+  '2026-06-01':'l','2026-06-02':'l','2026-06-03':'l','2026-06-04':'l','2026-06-05':'l','2026-06-06':'l','2026-06-07':'l',
+  '2026-06-08':'b','2026-06-09':'b','2026-06-10':'b','2026-06-11':'b','2026-06-12':'b','2026-06-13':'b','2026-06-14':'b',
+  '2026-06-15':'g','2026-06-16':'g','2026-06-17':'g','2026-06-18':'g','2026-06-19':'g','2026-06-20':'g','2026-06-21':'g',
+  '2026-06-22':'l','2026-06-23':'l','2026-06-24':'l','2026-06-25':'l','2026-06-26':'l','2026-06-27':'l','2026-06-28':'l',
+  '2026-06-29':'g','2026-06-30':'g',
+
+  // Июль
+  '2026-07-01':'g','2026-07-02':'g','2026-07-03':'g','2026-07-04':'g','2026-07-05':'g',
+  '2026-07-06':'l','2026-07-07':'l','2026-07-08':'l','2026-07-09':'l','2026-07-10':'l','2026-07-11':'l','2026-07-12':'l',
+  '2026-07-13':'b','2026-07-14':'b','2026-07-15':'b','2026-07-16':'b','2026-07-17':'b','2026-07-18':'b','2026-07-19':'b',
+  '2026-07-20':'g','2026-07-21':'g','2026-07-22':'g','2026-07-23':'g','2026-07-24':'g','2026-07-25':'g','2026-07-26':'g',
+  '2026-07-27':'l','2026-07-28':'l','2026-07-29':'l','2026-07-30':'l','2026-07-31':'l',
+
+  // Август
+  '2026-08-01':'l','2026-08-02':'l',
+  '2026-08-03':'b','2026-08-04':'b','2026-08-05':'b','2026-08-06':'b','2026-08-07':'b','2026-08-08':'b','2026-08-09':'b',
+  '2026-08-10':'g','2026-08-11':'g','2026-08-12':'g','2026-08-13':'g','2026-08-14':'g','2026-08-15':'g','2026-08-16':'g',
+  '2026-08-17':'l','2026-08-18':'l','2026-08-19':'l','2026-08-20':'l','2026-08-21':'l','2026-08-22':'l','2026-08-23':'l',
+  '2026-08-24':'b','2026-08-25':'b','2026-08-26':'b','2026-08-27':'b','2026-08-28':'b','2026-08-29':'b',
+  '2026-08-30':'l','2026-08-31':'l',
+
+  // Сентябрь
+  '2026-09-01':'l','2026-09-02':'l','2026-09-03':'l','2026-09-04':'l','2026-09-05':'l','2026-09-06':'l',
+  '2026-09-07':'g','2026-09-08':'g','2026-09-09':'g','2026-09-10':'g','2026-09-11':'g','2026-09-12':'g','2026-09-13':'g',
+  '2026-09-14':'b','2026-09-15':'b','2026-09-16':'b','2026-09-17':'b','2026-09-18':'b','2026-09-19':'b','2026-09-20':'b',
+  '2026-09-21':'l','2026-09-22':'l','2026-09-23':'l','2026-09-24':'l','2026-09-25':'l','2026-09-26':'l','2026-09-27':'l',
+  '2026-09-28':'g','2026-09-29':'g','2026-09-30':'g',
+
+  // Октябрь
+  '2026-10-01':'g','2026-10-02':'g','2026-10-03':'g','2026-10-04':'g',
+  '2026-10-05':'b','2026-10-06':'b','2026-10-07':'b','2026-10-08':'b','2026-10-09':'b','2026-10-10':'b','2026-10-11':'b',
+  '2026-10-12':'l','2026-10-13':'l','2026-10-14':'l','2026-10-15':'l','2026-10-16':'l','2026-10-17':'l','2026-10-18':'l',
+  '2026-10-19':'g','2026-10-20':'g','2026-10-21':'g','2026-10-22':'g','2026-10-23':'g','2026-10-24':'g','2026-10-25':'g',
+  '2026-10-26':'b','2026-10-27':'b','2026-10-28':'b','2026-10-29':'b','2026-10-30':'b','2026-10-31':'b',
+
+  // Ноябрь
+  '2026-11-01':'b',
+  '2026-11-02':'g','2026-11-03':'g','2026-11-04':'g','2026-11-05':'g','2026-11-06':'g','2026-11-07':'g','2026-11-08':'g',
+  '2026-11-09':'b','2026-11-10':'b','2026-11-11':'b','2026-11-12':'b','2026-11-13':'b','2026-11-14':'b','2026-11-15':'b',
+  '2026-11-16':'l','2026-11-17':'l','2026-11-18':'l','2026-11-19':'l','2026-11-20':'l','2026-11-21':'l','2026-11-22':'l',
+  '2026-11-23':'g','2026-11-24':'g','2026-11-25':'g','2026-11-26':'g','2026-11-27':'g','2026-11-28':'g','2026-11-29':'g',
+  '2026-11-30':'b',
+
+  // Декабрь (прогноз)
+  '2026-12-01':'b','2026-12-02':'b','2026-12-03':'b','2026-12-04':'b','2026-12-05':'b','2026-12-06':'b',
+  '2026-12-07':'l','2026-12-08':'l','2026-12-09':'l','2026-12-10':'l','2026-12-11':'l','2026-12-12':'l','2026-12-13':'l',
+  '2026-12-14':'g','2026-12-15':'g','2026-12-16':'g','2026-12-17':'g','2026-12-18':'g','2026-12-19':'g','2026-12-20':'g',
+  '2026-12-21':'b','2026-12-22':'b','2026-12-23':'b','2026-12-24':'b','2026-12-25':'b','2026-12-26':'b','2026-12-27':'b',
+  '2026-12-28':'l','2026-12-29':'l','2026-12-30':'l','2026-12-31':'l',
+};
+
+const SEED_TAGS = {
+  '2026-05-11':'ОБ','2026-05-12':'ОБ','2026-05-13':'ОБ','2026-05-14':'ОБ','2026-05-15':'ОБ',
+  '2026-05-16':'ОБ','2026-05-17':'ОБ','2026-05-18':'ОБ','2026-05-19':'ОБ','2026-05-20':'ОБ',
+  '2026-05-21':'ОБ','2026-05-22':'ОБ','2026-05-23':'ОБ','2026-05-24':'ОБ',
+  '2026-05-29':'О/Г','2026-05-30':'О/Г','2026-05-31':'О/Г',
+  '2026-06-01':'О/Г','2026-06-02':'О/Г','2026-06-03':'О/Г','2026-06-04':'О/Г','2026-06-05':'О/Г',
+  '2026-06-06':'О/Г','2026-06-07':'О/Г','2026-06-08':'О/Г','2026-06-09':'О/Г','2026-06-10':'О/Г',
+  '2026-06-11':'О/Г',
+  '2026-06-29':'О/Б','2026-06-30':'О/Б',
+  '2026-07-01':'ОБ','2026-07-02':'ОБ','2026-07-03':'ОБ','2026-07-04':'ОБ','2026-07-05':'ОБ',
+  '2026-07-06':'ОБ','2026-07-07':'ОБ','2026-07-08':'ОБ','2026-07-09':'ОБ','2026-07-10':'ОБ',
+  '2026-07-11':'ОБ','2026-07-12':'ОБ',
+  '2026-07-13':'ОЛ','2026-07-14':'ОЛ','2026-07-15':'ОЛ','2026-07-16':'ОЛ','2026-07-17':'ОЛ',
+  '2026-07-18':'ОЛ','2026-07-19':'ОЛ','2026-07-20':'ОЛ','2026-07-21':'ОЛ','2026-07-22':'ОЛ',
+  '2026-07-23':'ОЛ','2026-07-24':'ОЛ','2026-07-25':'ОЛ','2026-07-26':'ОЛ',
+  '2026-08-17':'О/Г','2026-08-18':'О/Г','2026-08-19':'О/Г','2026-08-20':'О/Г','2026-08-21':'О/Г',
+  '2026-08-22':'О/Г','2026-08-23':'О/Г','2026-08-24':'О/Г','2026-08-25':'О/Г','2026-08-26':'О/Г',
+  '2026-08-27':'О/Г','2026-08-28':'О/Г','2026-08-29':'О/Г','2026-08-30':'О/Г',
+  '2026-09-07':'О/Л','2026-09-08':'О/Л','2026-09-09':'О/Л','2026-09-10':'О/Л','2026-09-11':'О/Л',
+  '2026-09-12':'О/Л','2026-09-13':'О/Л',
+  '2026-11-03':'ОБ','2026-11-05':'ОБ','2026-11-06':'ОБ',
+  '2026-11-09':'О/Л','2026-11-10':'О/Л','2026-11-11':'О/Л','2026-11-12':'О/Л','2026-11-13':'О/Л',
+  '2026-11-14':'О/Л','2026-11-15':'О/Л',
+};
+
+/* =========================================================
+   СОСТОЯНИЕ
+   ========================================================= */
+const today = new Date();
+const todayYear = today.getFullYear();
+const todayMonth = today.getMonth();
+
+let state = {
+  year: (todayYear === 2026 || todayYear === 2027) ? todayYear : 2026,
+  month: (todayYear === 2026 || todayYear === 2027) ? todayMonth : 0,
+  selectedPerson: 'g',
+  data: { 2026: {}, 2027: {} },
+  tags: { 2026: {}, 2027: {} },
+};
+
+function save(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw){
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data && parsed.data[2026]){
+        // год и месяц не восстанавливаем — всегда текущие
+        state.selectedPerson = parsed.selectedPerson || 'g';
+        state.data = parsed.data;
+        state.tags = parsed.tags || { 2026: {}, 2027: {} };
+        return;
+      }
+    }
+  }catch(e){}
+  resetToSeed();
+}
+function resetToSeed(){
+  state.data = { 2026: Object.assign({}, SEED_2026), 2027: {} };
+  state.tags = { 2026: Object.assign({}, SEED_TAGS), 2027: {} };
+  save();
+}
+
+/* =========================================================
+   УТИЛИТЫ
+   ========================================================= */
+const pad2 = n => n < 10 ? '0'+n : ''+n;
+const dateKey = (y,m,d) => y + '-' + pad2(m+1) + '-' + pad2(d);
+const daysInMonth = (y,m) => new Date(y, m+1, 0).getDate();
+const firstWeekday = (y,m) => ((new Date(y, m, 1).getDay()) + 6) % 7;
+
+function personById(id){ return PEOPLE.find(p => p.id === id); }
+
+function countInYear(year, pid){
+  const map = state.data[year] || {};
+  let n = 0;
+  const prefix = year + '-';
+  for (const k in map) if (map[k] === pid && k.startsWith(prefix)) n++;
+  return n;
+}
+function countInMonth(year, month, pid){
+  const map = state.data[year] || {};
+  let n = 0;
+  const prefix = year + '-' + pad2(month+1) + '-';
+  for (const k in map) if (map[k] === pid && k.startsWith(prefix)) n++;
+  return n;
+}
+
+/* =========================================================
+   РЕНДЕР
+   ========================================================= */
+function renderYears(){
+  document.querySelectorAll('.year-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.year, 10) === state.year);
+  });
+}
+
+function renderPeople(){
+  let html = '';
+  for (const p of PEOPLE){
+    const n = countInYear(state.year, p.id);
+    const active = state.selectedPerson === p.id;
+    html +=
+      '<button class="person' + (active ? ' active' : '') + '" data-pick="' + p.id + '"' +
+        ' style="color:' + p.color + '">' +
+        '<span class="top">' +
+          '<span class="dot"></span>' +
+          '<span class="nm">' + p.short + '</span>' +
+        '</span>' +
+        '<span class="cnt">' + n + ' дн. в ' + state.year + '</span>' +
+      '</button>';
+  }
+  document.getElementById('people').innerHTML = html;
+}
+
+function renderInfo(){
+  const el = document.getElementById('info');
+  const p = personById(state.selectedPerson);
+  if (!p){ el.classList.remove('on'); return; }
+
+  const yearData = state.data[state.year] || {};
+  const monthPrefix = state.year + '-' + pad2(state.month+1) + '-';
+  const prefix = state.year + '-';
+
+  const inYear = [];
+  for (const k in yearData){
+    if (yearData[k] === p.id && k.startsWith(prefix)) inYear.push(k);
+  }
+  inYear.sort();
+
+  const inMonth = inYear.filter(k => k.startsWith(monthPrefix));
+  const first = inYear[0];
+  const last  = inYear[inYear.length-1];
+
+  function fmt(key){
+    if (!key) return '—';
+    const d = parseInt(key.slice(8,10),10);
+    const m = parseInt(key.slice(5,7),10);
+    return pad2(d) + '.' + pad2(m);
+  }
+
+  el.style.color = p.color;
+  el.innerHTML =
+    '<div class="name" style="color:' + p.color + '">' + p.name + '</div>' +
+    '<div class="stats">' +
+      '<div class="stat"><div class="k">Всего в ' + state.year + '</div>' +
+        '<div class="v">' + inYear.length + ' дн.</div></div>' +
+      '<div class="stat"><div class="k">В ' + MONTHS[state.month].toLowerCase() + '</div>' +
+        '<div class="v">' + inMonth.length + ' дн.</div></div>' +
+      '<div class="stat"><div class="k">Первое</div>' +
+        '<div class="v">' + fmt(first) + '</div></div>' +
+      '<div class="stat"><div class="k">Последнее</div>' +
+        '<div class="v">' + fmt(last) + '</div></div>' +
+    '</div>';
+  el.classList.add('on');
+}
+
+function renderTabs(){
+  let html = '';
+  const pid = state.selectedPerson;
+  const isCurYear = state.year === todayYear;
+  const curMonth = todayMonth;
+
+  for (let m = 0; m < 12; m++){
+    const active = m === state.month;
+    const isCur = isCurYear && m === curMonth;
+    let badge = '';
+    let badgeOn = false;
+    if (pid && pid !== 'erase'){
+      const n = countInMonth(state.year, m, pid);
+      if (n > 0){ badge = n; badgeOn = true; }
+    }
+    const cls = ['tab'];
+    if (active) cls.push('active');
+    if (isCur) cls.push('today-tab');
+
+    html += '<button class="' + cls.join(' ') + '" data-m="' + m + '">' +
+              '<span>' + MONTHS_SHORT[m] + '</span>' +
+              '<span class="badge' + (badgeOn ? ' on' : '') + '">' + (badgeOn ? badge : '·') + '</span>' +
+            '</button>';
+  }
+  document.getElementById('tabs').innerHTML = html;
+}
+
+function renderCalendar(){
+  const y = state.year;
+  const m = state.month;
+  const dim = daysInMonth(y, m);
+  const offset = firstWeekday(y, m);
+
+  document.getElementById('calTitle').innerHTML =
+    MONTHS[m] + ' <span class="yr">' + y + '</span>';
+
+  const tKey = dateKey(todayYear, todayMonth, today.getDate());
+  const map = state.data[y] || {};
+  const tags = state.tags[y] || {};
+  const pid = state.selectedPerson;
+  const hasHighlight = pid && pid !== 'erase';
+
+  let html = '';
+  for (let i = 0; i < offset; i++) html += '<div class="cell void"></div>';
+
+  for (let d = 1; d <= dim; d++){
+    const key = dateKey(y, m, d);
+    const who = map[key];
+    const dow = (offset + d - 1) % 7;
+    const isWknd = dow >= 5;
+    const isToday = key === tKey;
+
+    const cls = ['cell'];
+    if (who) cls.push(who);
+    else if (isWknd) cls.push('wknd');
+    if (isToday) cls.push('today');
+    if (hasHighlight && who === pid) cls.push('match');
+
+    const tag = tags[key];
+    const tagHtml = tag ? '<div class="tag">' + tag + '</div>' : '';
+
+    html += '<div class="' + cls.join(' ') + '" data-date="' + key + '">' +
+              '<div class="num">' + d + '</div>' + tagHtml +
+            '</div>';
+  }
+  document.getElementById('calGrid').innerHTML = html;
+}
+
+function render(){
+  renderYears();
+  renderPeople();
+  renderInfo();
+  renderTabs();
+  renderCalendar();
+}
+
+/* =========================================================
+   ТОСТ
+   ========================================================= */
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('on'), 1800);
+}
+
+/* =========================================================
+   СОБЫТИЯ
+   ========================================================= */
+document.getElementById('years').addEventListener('click', e => {
+  const btn = e.target.closest('[data-year]');
+  if (!btn) return;
+  state.year = parseInt(btn.dataset.year, 10);
+  save();
+  render();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+document.getElementById('people').addEventListener('click', e => {
+  const btn = e.target.closest('[data-pick]');
+  if (!btn) return;
+  state.selectedPerson = btn.dataset.pick;
+  save();
+  render();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('[data-m]');
+  if (!btn) return;
+  state.month = parseInt(btn.dataset.m, 10);
+  save();
+  render();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+document.getElementById('calGrid').addEventListener('click', e => {
+  const cell = e.target.closest('.cell[data-date]');
+  if (!cell) return;
+  const key = cell.dataset.date;
+  const map = state.data[state.year];
+  const cur = map[key];
+  const pid = state.selectedPerson;
+
+  if (cur === pid) delete map[key];
+  else map[key] = pid;
+
+  save();
+  render();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('Вернуть исходные данные? Твои правки будут потеряны.')) return;
+  resetToSeed();
+  render();
+  toast('Данные восстановлены');
+});
+
+load();
+render();
+
+})();
+</script>
+
+</body>
+</html>
